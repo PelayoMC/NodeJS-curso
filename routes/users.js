@@ -7,6 +7,22 @@ var authenticate = require("../authenticate");
 router.use(bodyParser.json());
 var User = require("../models/user");
 
+router
+    .route("/")
+    .get(
+        [authenticate.verifyUser, authenticate.verifyAdmin],
+        (req, res, next) => {
+            User.find({})
+                .then(
+                    (user) => {
+                        res.json(user);
+                    },
+                    (err) => next(err)
+                )
+                .catch((err) => next(err));
+        }
+    );
+
 router.post("/signup", (req, res, next) => {
     User.register(
         new User({ username: req.body.username }),
@@ -19,6 +35,7 @@ router.post("/signup", (req, res, next) => {
             } else {
                 if (req.body.firstname) user.firstname = req.body.firstname;
                 if (req.body.lastname) user.lastname = req.body.lastname;
+                if (req.body.admin) user.admin = req.body.admin;
                 user.save((err, user) => {
                     if (err) {
                         res.statusCode = 500;
@@ -51,7 +68,7 @@ router.post("/login", passport.authenticate("local"), (req, res) => {
     });
 });
 
-router.get("/logout", (req, res) => {
+router.get("/logout", (req, res, next) => {
     if (req.session) {
         req.session.destroy();
         res.clearCookie("session-id");
