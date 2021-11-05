@@ -22,7 +22,8 @@ favoriteRouter
     .get(cors.cors, (req, res, next) => {
         Favorites.find({})
             // Cuando obtengamos los favorites, los autores del comentario se obtendran del schema de usuarios
-            .populate("comments.author")
+            .populate("user")
+            .populate("comments")
             .then(
                 (favorites) => {
                     res.json(favorites);
@@ -46,22 +47,21 @@ favoriteRouter
                 .catch((err) => next(err));
         }
     )
-    .put(
-        cors.corsWithOptions,
-        [authenticate.verifyUser, authenticate.verifyAdmin],
-        (req, res, next) => {
-            req.statusCode = 403;
-            res.end("PUT operation not supported on /favorites");
-        }
-    )
     .delete(
         cors.corsWithOptions,
         [authenticate.verifyUser, authenticate.verifyAdmin],
         (req, res, next) => {
-            Favorites.remove({})
+            Favorites.find({ author: req.user._id })
                 .then(
-                    (resp) => {
-                        res.json(resp);
+                    (favorites) => {
+                        Favorites.findByIdAndRemove({})
+                            .then(
+                                (resp) => {
+                                    res.json(resp);
+                                },
+                                (err) => next(err)
+                            )
+                            .catch((err) => next(err));
                     },
                     (err) => next(err)
                 )
@@ -80,17 +80,6 @@ favoriteRouter
     .options(cors.corsWithOptions, (req, res) => {
         res.sendStatus(200);
     })
-    .get(cors.cors, (req, res, next) => {
-        Favorites.findById(req.params.favoriteId)
-            .populate("comments.author")
-            .then(
-                (favorite) => {
-                    res.json(favorite);
-                },
-                (err) => next(err)
-            )
-            .catch((err) => next(err));
-    })
     .post(
         cors.corsWithOptions,
         [authenticate.verifyUser, authenticate.verifyAdmin],
@@ -100,24 +89,6 @@ favoriteRouter
                 "POST operation not supported on /favorites/" +
                     req.params.favoriteId
             );
-        }
-    )
-    .put(
-        cors.corsWithOptions,
-        [authenticate.verifyUser, authenticate.verifyAdmin],
-        (req, res, next) => {
-            Favorites.findByIdAndUpdate(
-                req.params.favoriteId,
-                { $set: req.body },
-                { new: true }
-            )
-                .then(
-                    (favorite) => {
-                        res.json(favorite);
-                    },
-                    (err) => next(err)
-                )
-                .catch((err) => next(err));
         }
     )
     .delete(
