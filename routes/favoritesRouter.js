@@ -23,7 +23,7 @@ favoriteRouter
         Favorites.find({})
             // Cuando obtengamos los favorites, los autores del comentario se obtendran del schema de usuarios
             .populate("user")
-            .populate("comments")
+            .populate("dishes")
             .then(
                 (favorites) => {
                     res.json(favorites);
@@ -36,10 +36,10 @@ favoriteRouter
         cors.corsWithOptions,
         [authenticate.verifyUser, authenticate.verifyAdmin],
         (req, res, next) => {
+            req.body.user = req.user._id;
             Favorites.create(req.body)
                 .then(
                     (favorite) => {
-                        console.log("Favorite created: ", favorite._id);
                         res.json(favorite);
                     },
                     (err) => next(err)
@@ -51,10 +51,13 @@ favoriteRouter
         cors.corsWithOptions,
         [authenticate.verifyUser, authenticate.verifyAdmin],
         (req, res, next) => {
-            Favorites.find({ author: req.user._id })
+            Favorites.find({ user: req.user._id })
                 .then(
                     (favorites) => {
-                        Favorites.findByIdAndRemove({})
+                        let ids = favorites.map((e) => e._id);
+                        Favorites.deleteMany({
+                            _id: { $in: ids },
+                        })
                             .then(
                                 (resp) => {
                                     res.json(resp);
@@ -80,28 +83,63 @@ favoriteRouter
     .options(cors.corsWithOptions, (req, res) => {
         res.sendStatus(200);
     })
+    .get(cors.cors, (req, res, next) => {
+        Favorites.findById(req.params.favoriteId)
+            .populate("user")
+            .populate("dishes")
+            .then(
+                (favorites) => {
+                    res.json(favorites);
+                },
+                (err) => next(err)
+            )
+            .catch((err) => next(err));
+    })
     .post(
         cors.corsWithOptions,
         [authenticate.verifyUser, authenticate.verifyAdmin],
         (req, res, next) => {
-            res.statusCode = 403;
-            res.end(
-                "POST operation not supported on /favorites/" +
-                    req.params.favoriteId
-            );
+            Favorites.findOne({ user: req.user._id })
+                .then((favorite) => {
+                    favorite.dishes.push(req.params.favoriteId);
+                    favorite.save().then(
+                        (fav) => {
+                            Favorites.findById(fav._id)
+                                .populate("user")
+                                .populate("dishes")
+                                .then((f) => {
+                                    res.json(f);
+                                });
+                        },
+                        (err) => next(err)
+                    );
+                    res.json(favorite);
+                })
+                .catch((err) => next(err));
         }
     )
     .delete(
         cors.corsWithOptions,
         [authenticate.verifyUser, authenticate.verifyAdmin],
         (req, res, next) => {
-            Favorites.findByIdAndRemove(req.params.favoriteId)
-                .then(
-                    (resp) => {
-                        res.json(resp);
-                    },
-                    (err) => next(err)
-                )
+            Favorites.findOne({ user: req.user._id })
+                .then((favorite) => {
+                    favorite.dishes = favorite.dishes.filter(
+                        (e) => e !== req.params.favoriteId
+                    );
+                    favorite.save().then(
+                        (fav) => {
+                            Favorites.findById(fav._id)
+                                .populate("user")
+                                .populate("dishes")
+                                .then((f) => {
+                                    res.json(f);
+                                });
+                        },
+                        (err) => next(err)
+                    );
+                    res.json(favorite);
+                })
                 .catch((err) => next(err));
         }
     );
